@@ -115,4 +115,5 @@ Here is an example with `frontend-maven-plugin` to download node only in the par
 
 == TODO:
 
-write some tests, for now it is more a PoC/demo.
+- write some tests, for now it is more a PoC/demo.
+- move the configuration to actual XML and use `Xpp3Dom#merge` capabilities instead of inline patching (or support both).
