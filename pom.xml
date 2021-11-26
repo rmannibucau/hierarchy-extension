@@ -4,7 +4,7 @@
 
   <groupId>com.github.rmannibucau</groupId>
   <artifactId>hierarchy-extension</artifactId>
-  <version>0.0.1</version>
+  <version>0.0.2-SNAPSHOT</version>
   <name>Hierarchy Maven Extension</name>
   <description>A maven extension enabling to ignore pom packaging and copy the packaging=pom plugin definition in
     children.
