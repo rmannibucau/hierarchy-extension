@@ -37,6 +37,7 @@ public class SimpleRewrite implements Function<Xpp3Dom, Xpp3Dom> {
 
     private Xpp3Dom copy(final Xpp3Dom xpp3Dom) {
         final var dom = new Xpp3Dom(xpp3Dom.getName());
+        dom.setValue(xpp3Dom.getValue());
         Stream.of(xpp3Dom.getAttributeNames())
                 .forEach(attr -> dom.setAttribute(attr, xpp3Dom.getAttribute(attr)));
         Stream.of(xpp3Dom.getChildren())

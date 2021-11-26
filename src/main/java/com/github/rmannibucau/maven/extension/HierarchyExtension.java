@@ -211,7 +211,7 @@ public class HierarchyExtension extends AbstractMavenLifecycleParticipant {
             if (childrenRewrite != null) {
                 children.forEach((project, plugins) -> {
                     final var childDefinition = plugins.get(plugin.getKey());
-                    if (Xpp3Dom.class.isInstance(childDefinition.getConfiguration())) { // just rewrite since it exists
+                    if (childDefinition != null && Xpp3Dom.class.isInstance(childDefinition.getConfiguration())) { // just rewrite since it exists
                         logger.debug("Rewriting configuration for " + plugin + " in " + project.getId() + " with attributes: " + childrenRewrite.keySet());
                         childDefinition.setConfiguration(
                                 new SimpleRewrite(childrenRewrite, false)
@@ -239,7 +239,7 @@ public class HierarchyExtension extends AbstractMavenLifecycleParticipant {
             if (childOverrides != null) {
                 children.forEach((project, plugins) -> {
                     final var childDefinition = plugins.get(plugin.getKey());
-                    if (Xpp3Dom.class.isInstance(childDefinition.getConfiguration())) { // just rewrite since it exists
+                    if (childDefinition != null && Xpp3Dom.class.isInstance(childDefinition.getConfiguration())) { // just rewrite since it exists
                         logger.debug("Rewriting configuration for " + plugin + " in " + project.getId() + " with: " + childOverrides);
                         childDefinition.setConfiguration(Xpp3Dom.mergeXpp3Dom(Xpp3Dom.class.cast(childDefinition.getConfiguration()), parentOverrides));
                     } else {

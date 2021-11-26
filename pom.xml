@@ -24,6 +24,19 @@
       <version>${mvn.version}</version>
       <scope>provided</scope>
     </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.8.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>1.7.32</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <scm>
@@ -65,6 +78,14 @@
           <compilerArgs>
             <compilerArg>-parameters</compilerArg>
           </compilerArgs>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.0.0-M5</version>
+        <configuration>
+          <trimStackTrace>false</trimStackTrace>
         </configuration>
       </plugin>
       <plugin>
