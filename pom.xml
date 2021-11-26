@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.github.rmannibucau</groupId>
   <artifactId>hierarchy-extension</artifactId>
-  <version>0.0.2-SNAPSHOT</version>
+  <version>0.0.1-SNAPSHOT</version>
   <name>Hierarchy Maven Extension</name>
   <description>A maven extension enabling to ignore pom packaging and copy the packaging=pom plugin definition in
     children.
@@ -26,9 +28,9 @@
   </dependencies>
 
   <scm>
-    <connection>scm:git:https://github.com/rmannibucau/hierarchy-extension.git</connection>
-    <developerConnection>scm:git:https://github.com/rmannibucau/hierarchy-extension.git</developerConnection>
-    <url>https://github.com/rmannibucau/hierarchy-extension</url>
+    <connection>scm:git:https://github.com/rmannibucau/maven-travis-output.git</connection>
+    <developerConnection>scm:git:https://github.com/rmannibucau/maven-travis-output.git</developerConnection>
+    <url>https://github.com/rmannibucau/maven-travis-output</url>
     <tag>HEAD</tag>
   </scm>
 
@@ -46,7 +48,7 @@
   <licenses>
     <license>
       <name>Apache License, Version 2.0</name>
-      <url>https://github.com/rmannibucau/hierarchy-extension/blob/master/LICENSE</url>
+      <url>https://github.com/rmannibucau/maven-travis-output/blob/master/LICENSE</url>
       <distribution>may be downloaded from the Maven repository</distribution>
     </license>
   </licenses>
