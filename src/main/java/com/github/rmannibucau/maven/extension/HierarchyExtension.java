@@ -1,5 +1,7 @@
 package com.github.rmannibucau.maven.extension;
 
+import com.github.rmannibucau.maven.extension.fn.SimpleRewrite;
+import com.github.rmannibucau.maven.extension.fn.StripChildRewrite;
 import org.apache.maven.AbstractMavenLifecycleParticipant;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Plugin;
@@ -14,7 +16,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static java.util.function.Function.identity;
@@ -73,26 +74,32 @@ public class HierarchyExtension extends AbstractMavenLifecycleParticipant {
                         return;
                     }
 
-                    final var parentRewrite = extractAttributes("parent", overrides);
-                    if (parentRewrite != null) {
-                        logger.debug("Rewriting configuration for " +
-                                plugin + "#" + execution.getId() + " in " + pom.getId() +
-                                " with attributes: " + parentRewrite.keySet());
-                        execution.setConfiguration(new Rewrite(parentRewrite, false).apply(xpp3));
-                    }
+                    final var stringOverrides = overrides.getValue();
+                    if (stringOverrides != null) {
+                        final var parentRewrite = extractAttributes("parent", stringOverrides);
+                        if (parentRewrite != null) {
+                            logger.debug("Rewriting configuration for " +
+                                    plugin + "#" + execution.getId() + " in " + pom.getId() +
+                                    " with attributes: " + parentRewrite.keySet());
+                            execution.setConfiguration(new SimpleRewrite(parentRewrite, false)
+                                    .andThen(new StripChildRewrite(attributeName))
+                                    .apply(xpp3));
+                        }
 
-                    final var childrenRewrite = extractAttributes("child", overrides);
-                    if (childrenRewrite != null) {
-                        children.forEach((project, plugins) -> {
-                            final var childDefinition = plugins.get(plugin.getKey());
-                            if (childDefinition == null) { // create it all
-                                final var newPlugin = new Plugin();
-                                newPlugin.setGroupId(plugin.getGroupId());
-                                newPlugin.setArtifactId(plugin.getArtifactId());
-                                newPlugin.setVersion(plugin.getVersion());
-                                logger.debug("Adding plugin in " + project.getId());
-                                project.getBuild().getPlugins().add(newPlugin);
-                            } else {
+                        final var childrenRewrite = extractAttributes("child", stringOverrides);
+                        if (childrenRewrite != null) {
+                            children.forEach((project, plugins) -> {
+                                var childDefinition = plugins.get(plugin.getKey());
+                                if (childDefinition == null) { // create it all
+                                    childDefinition = new Plugin();
+                                    childDefinition.setGroupId(plugin.getGroupId());
+                                    childDefinition.setArtifactId(plugin.getArtifactId());
+                                    childDefinition.setVersion(plugin.getVersion());
+                                    logger.debug("Adding plugin in " + project.getId());
+                                    project.getBuild().getPlugins().add(childDefinition);
+                                }
+
+                                final var childPlugin = childDefinition;
                                 childDefinition.getExecutions().stream()
                                         .filter(it -> {
                                             final var sameId = Objects.equals(execution.getId(), it.getId());
@@ -105,7 +112,8 @@ public class HierarchyExtension extends AbstractMavenLifecycleParticipant {
                                             logger.debug("Rewriting configuration for " +
                                                     plugin + "#" + execution.getId() + " in " + project.getId() +
                                                     " with attributes: " + childrenRewrite.keySet());
-                                            existingExec.setConfiguration(new Rewrite(childrenRewrite, false)
+                                            existingExec.setConfiguration(new SimpleRewrite(childrenRewrite, false)
+                                                    .andThen(new StripChildRewrite(attributeName))
                                                     .apply(Xpp3Dom.class.cast(existingExec.getConfiguration())));
                                             return true;
                                         })
@@ -114,15 +122,67 @@ public class HierarchyExtension extends AbstractMavenLifecycleParticipant {
                                             exec.setId(execution.getId());
                                             exec.setGoals(execution.getGoals());
                                             exec.setPhase(execution.getPhase());
-                                            exec.setConfiguration(new Rewrite(childrenRewrite, true).apply(new Xpp3Dom("configuration")));
+                                            exec.setConfiguration(new SimpleRewrite(childrenRewrite, true).apply(new Xpp3Dom("configuration")));
                                             logger.debug("Adding execution " + exec.getId() + "configuration for " +
                                                     plugin + "#" + execution.getId() + " in " + project.getId() +
                                                     " with attributes: " + childrenRewrite.keySet());
-                                            childDefinition.getExecutions().add(exec);
+                                            childPlugin.getExecutions().add(exec);
                                             return false;
                                         });
-                            }
-                        });
+                            });
+                        }
+                    } else {
+                        final var parentOverride = overrides.getChild("parent");
+                        if (parentOverride != null) {
+                            logger.debug("Rewriting configuration for " +
+                                    plugin + "#" + execution.getId() + " in " + pom.getId() +
+                                    " with: " + parentOverride);
+                            execution.setConfiguration(Xpp3Dom.mergeXpp3Dom(xpp3, parentOverride));
+                        }
+
+                        final var childrenOverride = overrides.getChild("child");
+                        if (childrenOverride != null) {
+                            children.forEach((project, plugins) -> {
+                                var childDefinition = plugins.get(plugin.getKey());
+                                if (childDefinition == null) { // create it all
+                                    childDefinition = new Plugin();
+                                    childDefinition.setGroupId(plugin.getGroupId());
+                                    childDefinition.setArtifactId(plugin.getArtifactId());
+                                    childDefinition.setVersion(plugin.getVersion());
+                                    logger.debug("Adding plugin in " + project.getId());
+                                    project.getBuild().getPlugins().add(childDefinition);
+                                }
+                                final var childPlugin = childDefinition;
+                                childDefinition.getExecutions().stream()
+                                        .filter(it -> {
+                                            final var sameId = Objects.equals(execution.getId(), it.getId());
+                                            return (sameId && execution.getId() != null) ||
+                                                    /*should be an intersection but sufficient for now*/
+                                                    (sameId && Objects.equals(execution.getGoals(), it.getGoals()));
+                                        })
+                                        .findFirst()
+                                        .map(existingExec -> {
+                                            logger.debug("Rewriting configuration for " +
+                                                    plugin + "#" + execution.getId() + " in " + project.getId() +
+                                                    " with: " + childrenOverride);
+                                            existingExec.setConfiguration(new StripChildRewrite(attributeName)
+                                                    .apply(Xpp3Dom.mergeXpp3Dom(Xpp3Dom.class.cast(existingExec.getConfiguration()), childrenOverride)));
+                                            return true;
+                                        })
+                                        .orElseGet(() -> { // create it
+                                            final var exec = new PluginExecution();
+                                            exec.setId(execution.getId());
+                                            exec.setGoals(execution.getGoals());
+                                            exec.setPhase(execution.getPhase());
+                                            exec.setConfiguration(childrenOverride);
+                                            logger.debug("Adding execution " + exec.getId() + "configuration for " +
+                                                    plugin + "#" + execution.getId() + " in " + project.getId() +
+                                                    " with: " + childrenOverride);
+                                            childPlugin.getExecutions().add(exec);
+                                            return false;
+                                        });
+                            });
+                        }
                     }
                 });
     }
@@ -136,99 +196,98 @@ public class HierarchyExtension extends AbstractMavenLifecycleParticipant {
             return;
         }
 
-        final var parentRewrite = extractAttributes("parent", overrides);
-        if (parentRewrite != null) {
-            logger.debug("Rewriting " + plugin + " configuration in " + pom.getId() + " for attributes: " + parentRewrite.keySet());
-            plugin.setConfiguration(new Rewrite(parentRewrite, false).apply(xpp3));
-        }
+        final var stringOverrides = overrides.getValue();
 
-        final var childrenRewrite = extractAttributes("child", overrides);
-        if (childrenRewrite != null) {
-            children.forEach((project, plugins) -> {
-                final var childDefinition = plugins.get(plugin.getKey());
-                if (Xpp3Dom.class.isInstance(childDefinition.getConfiguration())) { // just rewrite since it exists
-                    logger.debug("Rewriting configuration for " + plugin + " in " + project.getId() + " with attributes: " + childrenRewrite.keySet());
-                    childDefinition.setConfiguration(new Rewrite(childrenRewrite, false).apply(Xpp3Dom.class.cast(childDefinition.getConfiguration())));
-                } else {
-                    final var newPlugin = new Plugin();
-                    newPlugin.setGroupId(plugin.getGroupId());
-                    newPlugin.setArtifactId(plugin.getArtifactId());
-                    newPlugin.setVersion(plugin.getVersion());
-                    newPlugin.setConfiguration(new Rewrite(childrenRewrite, true).apply(new Xpp3Dom("configuration")));
-                    logger.debug("Adding " + plugin + " configuration for " + project.getId() + " with attributes: " + childrenRewrite.keySet());
-                    project.getBuild().getPlugins().add(newPlugin);
-                }
-            });
+        if (stringOverrides != null) {
+            final var parentRewrite = extractAttributes("parent", stringOverrides);
+            if (parentRewrite != null) {
+                logger.debug("Rewriting " + plugin + " configuration in " + pom.getId() + " for attributes: " + parentRewrite.keySet());
+                plugin.setConfiguration(new SimpleRewrite(parentRewrite, false)
+                        .andThen(new StripChildRewrite(attributeName))
+                        .apply(xpp3));
+            }
+
+            final var childrenRewrite = extractAttributes("child", stringOverrides);
+            if (childrenRewrite != null) {
+                children.forEach((project, plugins) -> {
+                    final var childDefinition = plugins.get(plugin.getKey());
+                    if (Xpp3Dom.class.isInstance(childDefinition.getConfiguration())) { // just rewrite since it exists
+                        logger.debug("Rewriting configuration for " + plugin + " in " + project.getId() + " with attributes: " + childrenRewrite.keySet());
+                        childDefinition.setConfiguration(
+                                new SimpleRewrite(childrenRewrite, false)
+                                        .andThen(new StripChildRewrite(attributeName))
+                                        .apply(Xpp3Dom.class.cast(childDefinition.getConfiguration())));
+                    } else {
+                        final var newPlugin = new Plugin();
+                        newPlugin.setGroupId(plugin.getGroupId());
+                        newPlugin.setArtifactId(plugin.getArtifactId());
+                        newPlugin.setVersion(plugin.getVersion());
+                        newPlugin.setConfiguration(new SimpleRewrite(childrenRewrite, true).apply(new Xpp3Dom("configuration")));
+                        logger.debug("Adding " + plugin + " configuration for " + project.getId() + " with attributes: " + childrenRewrite.keySet());
+                        project.getBuild().getPlugins().add(newPlugin);
+                    }
+                });
+            }
+        } else {
+            final var parentOverrides = overrides.getChild("parent");
+            if (parentOverrides != null) {
+                logger.debug("Rewriting " + plugin + " configuration in " + pom.getId() + " with: " + parentOverrides);
+                plugin.setConfiguration(Xpp3Dom.mergeXpp3Dom(xpp3, parentOverrides));
+            }
+
+            final var childOverrides = overrides.getChild("child");
+            if (childOverrides != null) {
+                children.forEach((project, plugins) -> {
+                    final var childDefinition = plugins.get(plugin.getKey());
+                    if (Xpp3Dom.class.isInstance(childDefinition.getConfiguration())) { // just rewrite since it exists
+                        logger.debug("Rewriting configuration for " + plugin + " in " + project.getId() + " with: " + childOverrides);
+                        childDefinition.setConfiguration(Xpp3Dom.mergeXpp3Dom(Xpp3Dom.class.cast(childDefinition.getConfiguration()), parentOverrides));
+                    } else {
+                        final var newPlugin = new Plugin();
+                        newPlugin.setGroupId(plugin.getGroupId());
+                        newPlugin.setArtifactId(plugin.getArtifactId());
+                        newPlugin.setVersion(plugin.getVersion());
+                        newPlugin.setConfiguration(childOverrides);
+                        logger.debug("Adding " + plugin + " configuration for " + project.getId() + " with: " + childOverrides);
+                        project.getBuild().getPlugins().add(newPlugin);
+                    }
+                });
+            }
         }
     }
 
-    private String getOverrides(final Xpp3Dom xpp3) {
+    private Xpp3Dom getOverrides(final Xpp3Dom xpp3) {
         for (int i = 0; i < xpp3.getChildCount(); i++) {
             final var child = xpp3.getChild(i);
             if (!attributeName.equals(child.getName())) {
                 continue;
             }
             xpp3.removeChild(i);
-            return child.getValue();
+            return child;
         }
         return null;
     }
 
     private Map<String, String> extractAttributes(final String prefix, final String overrides) {
+        if (overrides == null) {
+            return null;
+        }
+
         final int start = overrides.indexOf(prefix + '(');
         if (start < 0) {
             return null;
         }
+
         final int end = overrides.indexOf(')', start);
         if (end < 0) {
             return null;
         }
+
         return Stream.of(overrides.substring(start + prefix.length() + 1, end).split(";"))
                 .map(it -> {
                     final var sep = it.indexOf('=');
                     return sep > 0 ? new String[]{it.substring(0, sep), it.substring(sep + 1)} : new String[]{it, null};
                 })
                 .collect(toMap(it -> it[0], it -> it[1], (a, b) -> a, LinkedHashMap::new));
-    }
-
-    // note: for children we could skip kept parent attributes but for now we just copy everything since it is not a big deal in mem
-    private class Rewrite implements Function<Xpp3Dom, Xpp3Dom> {
-        private final Map<String, String> values;
-        private final boolean copy;
-
-        private Rewrite(final Map<String, String> values, final boolean copy) {
-            this.values = values;
-            this.copy = copy;
-        }
-
-        @Override
-        public Xpp3Dom apply(final Xpp3Dom xpp3Dom) {
-            if (values == null || values.isEmpty()) {
-                return xpp3Dom;
-            }
-
-            final var copy = this.copy ? copy(xpp3Dom) : xpp3Dom;
-            values.forEach((key, value) -> {
-                final var child = copy.getChild(key);
-                if (child == null) {
-                    final var newChild = new Xpp3Dom(key);
-                    if (value != null) {
-                        newChild.setValue(value);
-                    }
-                    copy.addChild(newChild);
-                }
-            });
-            return copy;
-        }
-
-        private Xpp3Dom copy(final Xpp3Dom xpp3Dom) {
-            final var dom = new Xpp3Dom(xpp3Dom.getName());
-            Stream.of(xpp3Dom.getAttributeNames())
-                    .forEach(attr -> dom.setAttribute(attr, xpp3Dom.getAttribute(attr)));
-            Stream.of(xpp3Dom.getChildren())
-                    .filter(it -> !attributeName.equals(it.getName()))
-                    .forEach(child -> dom.addChild(copy(child)));
-            return dom;
-        }
     }
 }
