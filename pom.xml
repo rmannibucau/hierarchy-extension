@@ -11,6 +11,7 @@
   <description>A maven extension enabling to ignore pom packaging and copy the packaging=pom plugin definition in
     children.
   </description>
+  <url>https://github.com/rmannibucau/hierarchy-extension</url>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
